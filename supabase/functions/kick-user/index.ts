@@ -29,13 +29,23 @@ serve(async (req) => {
       },
     });
 
+    const responseText = await response.text();
+    console.log("User data response status:", response.status);
+    console.log("User data response:", responseText);
+
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error("User data fetch failed:", errorText);
-      throw new Error(`Failed to fetch user data: ${response.status} ${errorText}`);
+      throw new Error(`Failed to fetch user data: ${response.status} ${responseText}`);
     }
 
-    const userData = await response.json();
+    // Parse the response text as JSON
+    let userData;
+    try {
+      userData = JSON.parse(responseText);
+    } catch (e) {
+      console.error("Failed to parse user data as JSON:", e);
+      throw new Error(`Invalid user data format: ${responseText}`);
+    }
+    
     console.log("User data fetch successful");
     
     return new Response(JSON.stringify(userData), {

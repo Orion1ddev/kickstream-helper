@@ -24,6 +24,8 @@ serve(async (req) => {
     }
 
     console.log("Exchanging code for token");
+    console.log("Using clientId:", CLIENT_ID);
+    console.log("Using redirect:", REDIRECT_URL);
     
     // Exchange authorization code for access token
     const response = await fetch("https://kick.com/oauth2/token", {
@@ -40,13 +42,23 @@ serve(async (req) => {
       }),
     });
 
+    const responseText = await response.text();
+    console.log("Token response status:", response.status);
+    console.log("Token response:", responseText);
+
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Token exchange failed:", errorText);
-      throw new Error(`Failed to exchange token: ${response.status} ${errorText}`);
+      throw new Error(`Failed to exchange token: ${response.status} ${responseText}`);
     }
 
-    const data = await response.json();
+    // Parse the response text as JSON
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (e) {
+      console.error("Failed to parse response as JSON:", e);
+      throw new Error(`Invalid response format: ${responseText}`);
+    }
+
     console.log("Token exchange successful");
     
     return new Response(JSON.stringify(data), {
