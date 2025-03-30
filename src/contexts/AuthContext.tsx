@@ -1,12 +1,15 @@
 
 import React, { createContext, useState, useContext, useEffect } from "react";
 import { useToast } from "@/components/ui/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 interface User {
   id: string;
   username: string;
   avatar_url?: string;
   access_token: string;
+  refresh_token?: string;
+  email?: string;
 }
 
 interface AuthContextType {
@@ -61,28 +64,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           description: "Failed to login with Kick. Please try again.",
           variant: "destructive",
         });
+        setLoading(false);
         return;
       }
 
       if (code) {
         setLoading(true);
         try {
-          // In a real implementation, we would exchange the code for an access token
-          // For now, we'll just simulate a successful login
-          const mockUser = {
-            id: "mock-user-id",
-            username: "kickuser",
-            avatar_url: "https://via.placeholder.com/150",
-            access_token: "mock-access-token",
-          };
-          
-          setUser(mockUser);
-          localStorage.setItem("kickstream_user", JSON.stringify(mockUser));
-          
-          toast({
-            title: "Login Successful",
-            description: "You are now logged in with Kick.",
+          // Exchange code for token using Supabase Edge Function
+          const { data, error } = await supabase.functions.invoke('kick-auth', {
+            body: { code },
           });
+
+          if (error) throw error;
+          
+          if (data && data.access_token) {
+            // Get user profile with the access token
+            const { data: userData, error: userError } = await supabase.functions.invoke('kick-user', {
+              body: { access_token: data.access_token },
+            });
+
+            if (userError) throw userError;
+            
+            const userProfile = {
+              id: userData.id.toString(),
+              username: userData.username,
+              avatar_url: userData.profile_pic,
+              email: userData.email,
+              access_token: data.access_token,
+              refresh_token: data.refresh_token,
+            };
+            
+            setUser(userProfile);
+            localStorage.setItem("kickstream_user", JSON.stringify(userProfile));
+            
+            toast({
+              title: "Login Successful",
+              description: "You are now logged in with Kick.",
+            });
+          }
         } catch (error) {
           console.error("Failed to exchange code for token:", error);
           toast({
@@ -100,15 +120,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [toast]);
 
   const login = () => {
-    // In a real implementation, we would redirect to Kick's OAuth endpoint
-    // For demo purposes, we'll simulate the OAuth flow
-    // This would be replaced with actual Kick OAuth URL
+    // Redirect to Kick's OAuth endpoint
+    const CLIENT_ID = "01JQMD5PMFX0MFYPMT9A7YDHGC";
+    const REDIRECT_URI = "https://preview--kickstream-helper.lovable.app/login";
+    const SCOPES = "user:read channel:read events:read";
     
-    // Normally, this would be something like:
-    // window.location.href = `https://kick.com/oauth/authorize?client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&response_type=code&scope=user:read`;
-    
-    // For now, let's simulate with a mock URL that redirects back to our app with a code
-    window.location.href = `${window.location.origin}?code=mock_auth_code`;
+    window.location.href = `https://kick.com/oauth2/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=${encodeURIComponent(SCOPES)}`;
   };
 
   const logout = () => {
