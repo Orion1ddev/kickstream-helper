@@ -28,7 +28,7 @@ serve(async (req) => {
     console.log("Using redirect:", REDIRECT_URL);
     console.log("Code verifier provided:", code_verifier ? "Yes" : "No");
     
-    // Exchange authorization code for access token
+    // Prepare the token request parameters
     const tokenRequest = {
       grant_type: "authorization_code",
       client_id: CLIENT_ID,
@@ -42,29 +42,41 @@ serve(async (req) => {
       Object.assign(tokenRequest, { code_verifier });
     }
 
-    const response = await fetch("https://id.kick.com/oauth/token", {
+    console.log("Token request payload structure:", Object.keys(tokenRequest).join(", "));
+
+    // Perform the token exchange request
+    const tokenResponse = await fetch("https://id.kick.com/oauth/token", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "Accept": "application/json"
       },
       body: JSON.stringify(tokenRequest),
     });
 
-    const responseText = await response.text();
-    console.log("Token response status:", response.status);
-    console.log("Token response:", responseText);
+    const responseText = await tokenResponse.text();
+    console.log("Token response status:", tokenResponse.status);
+    console.log("Token response headers:", JSON.stringify(Object.fromEntries([...tokenResponse.headers])));
+    console.log("Token response body:", responseText);
 
-    if (!response.ok) {
-      throw new Error(`Failed to exchange token: ${response.status} ${responseText}`);
+    // Check if the response was successful
+    if (!tokenResponse.ok) {
+      throw new Error(`Failed to exchange token: ${tokenResponse.status} ${responseText}`);
     }
 
     // Parse the response text as JSON
     let data;
     try {
       data = JSON.parse(responseText);
+      console.log("Access token received:", data.access_token ? "Yes" : "No");
+      console.log("Refresh token received:", data.refresh_token ? "Yes" : "No");
     } catch (e) {
       console.error("Failed to parse response as JSON:", e);
       throw new Error(`Invalid response format: ${responseText}`);
+    }
+
+    if (!data.access_token) {
+      throw new Error("No access token received from Kick");
     }
 
     console.log("Token exchange successful");

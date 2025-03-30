@@ -18,6 +18,7 @@ interface AuthContextType {
   login: () => void;
   logout: () => void;
   isAuthenticated: boolean;
+  error: string | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -45,6 +46,7 @@ const base64urlencode = (buffer: ArrayBuffer): string => {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
 
   // Check if user is logged in when app loads
@@ -72,23 +74,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Handle OAuth redirect
   useEffect(() => {
     const handleOAuthRedirect = async () => {
+      setLoading(true);
+      setError(null);
+      
       const urlParams = new URLSearchParams(window.location.search);
       const code = urlParams.get("code");
-      const error = urlParams.get("error");
+      const errorParam = urlParams.get("error");
       const errorDescription = urlParams.get("error_description");
       const state = urlParams.get("state");
 
       console.log("URL params:", { 
         code: code ? "present" : "not present", 
-        error, 
+        error: errorParam, 
         errorDescription,
         state
       });
+
+      // Clean URL after processing
+      if (code || errorParam) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+
+      // Handle OAuth error from Kick
+      if (errorParam) {
+        console.error("OAuth error:", errorParam, errorDescription);
+        const errorMsg = errorDescription || "Failed to login with Kick. Please try again.";
+        setError(errorMsg);
+        toast({
+          title: "Authentication Error",
+          description: errorMsg,
+          variant: "destructive",
+        });
+        localStorage.removeItem("kickstream_oauth_state");
+        localStorage.removeItem("kickstream_code_verifier");
+        setLoading(false);
+        return;
+      }
 
       // Validate state if present
       const storedState = localStorage.getItem("kickstream_oauth_state");
       if (state && storedState && state !== storedState) {
         console.error("OAuth state mismatch, possible CSRF attack");
+        setError("Authentication failed due to security mismatch. Please try again.");
         toast({
           title: "Security Error",
           description: "Authentication failed due to security mismatch. Please try again.",
@@ -100,35 +127,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      // Clean URL after processing
-      if (code || error) {
-        window.history.replaceState({}, document.title, window.location.pathname);
-      }
-
-      if (error) {
-        console.error("OAuth error:", error, errorDescription);
-        toast({
-          title: "Authentication Error",
-          description: errorDescription || "Failed to login with Kick. Please try again.",
-          variant: "destructive",
-        });
-        localStorage.removeItem("kickstream_oauth_state");
-        localStorage.removeItem("kickstream_code_verifier");
-        setLoading(false);
-        return;
-      }
-
       if (code) {
-        setLoading(true);
         try {
-          console.log("Exchanging code for token...");
+          console.log("Authorization code received, exchanging for token...");
           
           // Get code verifier from localStorage
           const codeVerifier = localStorage.getItem("kickstream_code_verifier");
           console.log("Code verifier retrieved:", codeVerifier ? "Yes" : "No");
           
+          if (!codeVerifier) {
+            throw new Error("Code verifier is missing. Please try logging in again.");
+          }
+          
           // Exchange code for token using Supabase Edge Function
-          const { data, error } = await supabase.functions.invoke('kick-auth', {
+          console.log("Calling kick-auth function...");
+          const { data: tokenData, error: tokenError } = await supabase.functions.invoke('kick-auth', {
             body: { 
               code,
               code_verifier: codeVerifier 
@@ -139,61 +152,65 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           localStorage.removeItem("kickstream_oauth_state");
           localStorage.removeItem("kickstream_code_verifier");
 
-          if (error) {
-            console.error("Token exchange error:", error);
-            throw error;
+          if (tokenError) {
+            console.error("Token exchange error:", tokenError);
+            throw new Error(`Failed to exchange authorization code: ${tokenError.message}`);
           }
           
-          console.log("Token exchange response:", data);
+          console.log("Token exchange response received");
           
-          if (data && data.access_token) {
-            // Get user profile with the access token
-            console.log("Fetching user profile...");
-            const { data: userData, error: userError } = await supabase.functions.invoke('kick-user', {
-              body: { access_token: data.access_token },
-            });
+          if (!tokenData || !tokenData.access_token) {
+            console.error("Invalid token data:", tokenData);
+            throw new Error("Failed to get access token from Kick");
+          }
+          
+          // Get user profile with the access token
+          console.log("Fetching user profile...");
+          const { data: userData, error: userError } = await supabase.functions.invoke('kick-user', {
+            body: { access_token: tokenData.access_token },
+          });
 
-            if (userError) {
-              console.error("User profile fetch error:", userError);
-              throw userError;
-            }
-            
-            console.log("User profile response:", userData);
-            
-            if (!userData || !userData.id) {
-              throw new Error("Invalid user data returned from API");
-            }
-            
-            const userProfile = {
-              id: userData.id.toString(),
-              username: userData.username,
-              avatar_url: userData.profile_pic,
-              email: userData.email,
-              access_token: data.access_token,
-              refresh_token: data.refresh_token,
-            };
-            
-            setUser(userProfile);
-            localStorage.setItem("kickstream_user", JSON.stringify(userProfile));
-            
-            toast({
-              title: "Login Successful",
-              description: "You are now logged in with Kick.",
-            });
-          } else {
-            console.error("No access token in response");
-            throw new Error("Failed to get access token");
+          if (userError) {
+            console.error("User profile fetch error:", userError);
+            throw new Error(`Failed to fetch user profile: ${userError.message}`);
           }
-        } catch (error) {
-          console.error("Failed to exchange code for token:", error);
+          
+          console.log("User profile response received");
+          
+          if (!userData || !userData.id) {
+            console.error("Invalid user data:", userData);
+            throw new Error("Invalid user data returned from API");
+          }
+          
+          const userProfile = {
+            id: userData.id.toString(),
+            username: userData.username,
+            avatar_url: userData.profile_pic,
+            email: userData.email,
+            access_token: tokenData.access_token,
+            refresh_token: tokenData.refresh_token,
+          };
+          
+          setUser(userProfile);
+          localStorage.setItem("kickstream_user", JSON.stringify(userProfile));
+          
+          toast({
+            title: "Login Successful",
+            description: `Welcome, ${userProfile.username}!`,
+          });
+        } catch (error: any) {
+          console.error("Failed to complete authentication:", error);
+          setError(error.message || "Failed to complete login process. Please try again.");
           toast({
             title: "Authentication Error",
-            description: "Failed to complete login process. Please try again.",
+            description: error.message || "Failed to complete login process. Please try again.",
             variant: "destructive",
           });
         } finally {
           setLoading(false);
         }
+      } else {
+        setLoading(false);
       }
     };
 
@@ -202,6 +219,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async () => {
     try {
+      setError(null);
+      
       // Generate PKCE code verifier and challenge
       const codeVerifier = generateCodeVerifier();
       const codeChallenge = await sha256(codeVerifier).then(base64urlencode);
@@ -226,16 +245,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       const authUrl = new URL("https://id.kick.com/oauth/authorize");
       authUrl.searchParams.append("client_id", CLIENT_ID);
-      authUrl.searchParams.append("redirect_uri", encodeURIComponent(REDIRECT_URI));
+      authUrl.searchParams.append("redirect_uri", REDIRECT_URI);
       authUrl.searchParams.append("response_type", "code");
-      authUrl.searchParams.append("scope", encodeURIComponent(SCOPES));
+      authUrl.searchParams.append("scope", SCOPES);
       authUrl.searchParams.append("code_challenge", codeChallenge);
       authUrl.searchParams.append("code_challenge_method", "S256");
       authUrl.searchParams.append("state", state);
       
+      console.log("Authorization URL:", authUrl.toString());
       window.location.href = authUrl.toString();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error initiating login:", error);
+      setError(error.message || "Failed to start the login process. Please try again.");
       toast({
         title: "Login Error",
         description: "Failed to start the login process. Please try again.",
@@ -261,6 +282,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         login,
         logout,
         isAuthenticated: !!user,
+        error,
       }}
     >
       {children}

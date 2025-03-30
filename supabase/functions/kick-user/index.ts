@@ -22,28 +22,36 @@ serve(async (req) => {
     console.log("Fetching user data with access token");
     
     // Get user profile with access token
-    const response = await fetch("https://kick.com/api/v2/user/me", {
+    const userResponse = await fetch("https://kick.com/api/v2/user/me", {
       method: "GET",
       headers: {
         "Authorization": `Bearer ${access_token}`,
+        "Accept": "application/json"
       },
     });
 
-    const responseText = await response.text();
-    console.log("User data response status:", response.status);
+    const responseText = await userResponse.text();
+    console.log("User data response status:", userResponse.status);
+    console.log("User data response headers:", JSON.stringify(Object.fromEntries([...userResponse.headers])));
     console.log("User data response body:", responseText);
 
-    if (!response.ok) {
-      throw new Error(`Failed to fetch user data: ${response.status} ${responseText}`);
+    if (!userResponse.ok) {
+      throw new Error(`Failed to fetch user data: ${userResponse.status} ${responseText}`);
     }
 
     // Parse the response text as JSON
     let userData;
     try {
       userData = JSON.parse(responseText);
+      console.log("User ID received:", userData.id ? "Yes" : "No");
+      console.log("Username received:", userData.username ? "Yes" : "No");
     } catch (e) {
       console.error("Failed to parse user data as JSON:", e);
       throw new Error(`Invalid user data format: ${responseText}`);
+    }
+    
+    if (!userData.id) {
+      throw new Error("Invalid user data received from Kick");
     }
     
     console.log("User data fetch successful");
