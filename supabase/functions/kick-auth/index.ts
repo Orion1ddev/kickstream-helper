@@ -28,30 +28,28 @@ serve(async (req) => {
     console.log("Using redirect:", REDIRECT_URL);
     console.log("Code verifier provided:", code_verifier ? "Yes" : "No");
     
-    // Prepare the token request parameters
-    const tokenRequest = {
-      grant_type: "authorization_code",
-      client_id: CLIENT_ID,
-      client_secret: CLIENT_SECRET,
-      redirect_uri: REDIRECT_URL,
-      code: code,
-    };
-
+    // Create form data for the token request (OAuth standard)
+    const formData = new FormData();
+    formData.append("grant_type", "authorization_code");
+    formData.append("client_id", CLIENT_ID);
+    formData.append("client_secret", CLIENT_SECRET);
+    formData.append("redirect_uri", REDIRECT_URL);
+    formData.append("code", code);
+    
     // Add code_verifier if provided (for PKCE flow)
     if (code_verifier) {
-      Object.assign(tokenRequest, { code_verifier });
+      formData.append("code_verifier", code_verifier);
     }
 
-    console.log("Token request payload structure:", Object.keys(tokenRequest).join(", "));
+    console.log("Token request payload prepared as FormData");
 
-    // Perform the token exchange request
+    // Perform the token exchange request using form data format
     const tokenResponse = await fetch("https://id.kick.com/oauth/token", {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
         "Accept": "application/json"
       },
-      body: JSON.stringify(tokenRequest),
+      body: formData,
     });
 
     const responseText = await tokenResponse.text();

@@ -1,16 +1,36 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
-import { Navigate } from "react-router-dom";
+import { Navigate, useSearchParams } from "react-router-dom";
 import { Navbar } from "@/components/Navbar";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Info } from "lucide-react";
+import { Info, AlertCircle } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 const Login = () => {
   const { login, isAuthenticated, loading, error } = useAuth();
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [searchParams] = useSearchParams();
+  const { toast } = useToast();
+  
+  // Check for auth errors in URL parameters
+  useEffect(() => {
+    const errorParam = searchParams.get("error");
+    const errorDescription = searchParams.get("error_description");
+    
+    if (errorParam) {
+      toast({
+        title: "Authentication Error",
+        description: errorDescription || "Failed to login with Kick. Please try again.",
+        variant: "destructive",
+      });
+      
+      // Clean URL after processing
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, [searchParams, toast]);
 
   const handleLogin = () => {
     setIsLoggingIn(true);
@@ -44,7 +64,8 @@ const Login = () => {
           <CardContent className="grid gap-4">
             {error && (
               <Alert variant="destructive">
-                <AlertTitle>Error</AlertTitle>
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Authentication Error</AlertTitle>
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
