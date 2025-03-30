@@ -22,6 +22,26 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// PKCE utilities
+const generateCodeVerifier = (): string => {
+  const array = new Uint8Array(32);
+  crypto.getRandomValues(array);
+  return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+};
+
+const sha256 = async (plain: string): Promise<ArrayBuffer> => {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(plain);
+  return await crypto.subtle.digest('SHA-256', data);
+};
+
+const base64urlencode = (buffer: ArrayBuffer): string => {
+  return btoa(String.fromCharCode(...new Uint8Array(buffer)))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -56,8 +76,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const code = urlParams.get("code");
       const error = urlParams.get("error");
       const errorDescription = urlParams.get("error_description");
+      const state = urlParams.get("state");
 
-      console.log("URL params:", { code: code ? "present" : "not present", error, errorDescription });
+      console.log("URL params:", { 
+        code: code ? "present" : "not present", 
+        error, 
+        errorDescription,
+        state
+      });
+
+      // Validate state if present
+      const storedState = localStorage.getItem("kickstream_oauth_state");
+      if (state && storedState && state !== storedState) {
+        console.error("OAuth state mismatch, possible CSRF attack");
+        toast({
+          title: "Security Error",
+          description: "Authentication failed due to security mismatch. Please try again.",
+          variant: "destructive",
+        });
+        localStorage.removeItem("kickstream_oauth_state");
+        localStorage.removeItem("kickstream_code_verifier");
+        setLoading(false);
+        return;
+      }
 
       // Clean URL after processing
       if (code || error) {
@@ -71,6 +112,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           description: errorDescription || "Failed to login with Kick. Please try again.",
           variant: "destructive",
         });
+        localStorage.removeItem("kickstream_oauth_state");
+        localStorage.removeItem("kickstream_code_verifier");
         setLoading(false);
         return;
       }
@@ -79,10 +122,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setLoading(true);
         try {
           console.log("Exchanging code for token...");
+          
+          // Get code verifier from localStorage
+          const codeVerifier = localStorage.getItem("kickstream_code_verifier");
+          console.log("Code verifier retrieved:", codeVerifier ? "Yes" : "No");
+          
           // Exchange code for token using Supabase Edge Function
           const { data, error } = await supabase.functions.invoke('kick-auth', {
-            body: { code },
+            body: { 
+              code,
+              code_verifier: codeVerifier 
+            },
           });
+
+          // Clean up PKCE and state values
+          localStorage.removeItem("kickstream_oauth_state");
+          localStorage.removeItem("kickstream_code_verifier");
 
           if (error) {
             console.error("Token exchange error:", error);
@@ -104,6 +159,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
             
             console.log("User profile response:", userData);
+            
+            if (!userData || !userData.id) {
+              throw new Error("Invalid user data returned from API");
+            }
             
             const userProfile = {
               id: userData.id.toString(),
@@ -141,17 +200,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     handleOAuthRedirect();
   }, [toast]);
 
-  const login = () => {
-    // Redirect to Kick's OAuth endpoint
-    const CLIENT_ID = "01JQMD5PMFX0MFYPMT9A7YDHGC";
-    const REDIRECT_URI = "https://preview--kickstream-helper.lovable.app/login";
-    const SCOPES = "user:read channel:read events:read";
-    
-    console.log("Initiating login redirect to Kick OAuth...");
-    console.log("Using client ID:", CLIENT_ID);
-    console.log("Using redirect URI:", REDIRECT_URI);
-    
-    window.location.href = `https://kick.com/oauth2/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=${encodeURIComponent(SCOPES)}`;
+  const login = async () => {
+    try {
+      // Generate PKCE code verifier and challenge
+      const codeVerifier = generateCodeVerifier();
+      const codeChallenge = await sha256(codeVerifier).then(base64urlencode);
+      
+      // Generate random state
+      const state = Math.random().toString(36).substring(2, 15);
+      
+      // Store code verifier and state in localStorage for later verification
+      localStorage.setItem("kickstream_code_verifier", codeVerifier);
+      localStorage.setItem("kickstream_oauth_state", state);
+      
+      // Redirect to Kick's OAuth endpoint with PKCE
+      const CLIENT_ID = "01JQMD5PMFX0MFYPMT9A7YDHGC";
+      const REDIRECT_URI = "https://preview--kickstream-helper.lovable.app/login";
+      const SCOPES = "user:read channel:read events:read";
+      
+      console.log("Initiating login redirect to Kick OAuth...");
+      console.log("Using client ID:", CLIENT_ID);
+      console.log("Using redirect URI:", REDIRECT_URI);
+      console.log("Code challenge generated:", codeChallenge ? "Yes" : "No");
+      console.log("State value generated:", state);
+      
+      const authUrl = new URL("https://id.kick.com/oauth/authorize");
+      authUrl.searchParams.append("client_id", CLIENT_ID);
+      authUrl.searchParams.append("redirect_uri", encodeURIComponent(REDIRECT_URI));
+      authUrl.searchParams.append("response_type", "code");
+      authUrl.searchParams.append("scope", encodeURIComponent(SCOPES));
+      authUrl.searchParams.append("code_challenge", codeChallenge);
+      authUrl.searchParams.append("code_challenge_method", "S256");
+      authUrl.searchParams.append("state", state);
+      
+      window.location.href = authUrl.toString();
+    } catch (error) {
+      console.error("Error initiating login:", error);
+      toast({
+        title: "Login Error",
+        description: "Failed to start the login process. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const logout = () => {

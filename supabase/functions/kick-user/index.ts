@@ -31,7 +31,7 @@ serve(async (req) => {
 
     const responseText = await response.text();
     console.log("User data response status:", response.status);
-    console.log("User data response:", responseText);
+    console.log("User data response body:", responseText);
 
     if (!response.ok) {
       throw new Error(`Failed to fetch user data: ${response.status} ${responseText}`);

@@ -17,7 +17,7 @@ serve(async (req) => {
   }
 
   try {
-    const { code } = await req.json();
+    const { code, code_verifier } = await req.json();
     
     if (!code) {
       throw new Error("No authorization code provided");
@@ -26,20 +26,28 @@ serve(async (req) => {
     console.log("Exchanging code for token");
     console.log("Using clientId:", CLIENT_ID);
     console.log("Using redirect:", REDIRECT_URL);
+    console.log("Code verifier provided:", code_verifier ? "Yes" : "No");
     
     // Exchange authorization code for access token
-    const response = await fetch("https://kick.com/oauth2/token", {
+    const tokenRequest = {
+      grant_type: "authorization_code",
+      client_id: CLIENT_ID,
+      client_secret: CLIENT_SECRET,
+      redirect_uri: REDIRECT_URL,
+      code: code,
+    };
+
+    // Add code_verifier if provided (for PKCE flow)
+    if (code_verifier) {
+      Object.assign(tokenRequest, { code_verifier });
+    }
+
+    const response = await fetch("https://id.kick.com/oauth/token", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        grant_type: "authorization_code",
-        client_id: CLIENT_ID,
-        client_secret: CLIENT_SECRET,
-        redirect_uri: REDIRECT_URL,
-        code: code,
-      }),
+      body: JSON.stringify(tokenRequest),
     });
 
     const responseText = await response.text();
