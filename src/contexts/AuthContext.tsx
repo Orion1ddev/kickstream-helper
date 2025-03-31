@@ -235,7 +235,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Redirect to Kick's OAuth endpoint with PKCE
       const CLIENT_ID = "01JQMD5PMFX0MFYPMT9A7YDHGC";
       const REDIRECT_URI = "https://preview--kickstream-helper.lovable.app/login";
-      const SCOPES = "user:read channel:read events:read";
+      const SCOPES = "user:read channel:read events:read events:subscribe";
       
       console.log("Initiating login redirect to Kick OAuth...");
       console.log("Using client ID:", CLIENT_ID);

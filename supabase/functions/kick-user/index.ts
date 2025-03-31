@@ -11,7 +11,7 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
-  
+
   try {
     const { access_token } = await req.json();
     
@@ -20,52 +20,49 @@ serve(async (req) => {
     }
 
     console.log("Fetching user data with access token");
-    
-    // Get user profile with access token
-    const userResponse = await fetch("https://kick.com/api/v2/user/me", {
-      method: "GET",
+
+    // Call the Kick API to fetch user data
+    const response = await fetch('https://kick.com/api/v2/user/me', {
+      method: 'GET',
       headers: {
-        "Authorization": `Bearer ${access_token}`,
-        "Accept": "application/json"
+        'Authorization': `Bearer ${access_token}`,
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
       },
     });
 
-    const responseText = await userResponse.text();
-    console.log("User data response status:", userResponse.status);
-    console.log("User data response headers:", JSON.stringify(Object.fromEntries([...userResponse.headers])));
+    console.log("User data response status:", response.status);
+    console.log("User data response headers:", JSON.stringify(Object.fromEntries([...response.headers])));
+    
+    const responseText = await response.text();
     console.log("User data response body:", responseText);
 
-    if (!userResponse.ok) {
-      throw new Error(`Failed to fetch user data: ${userResponse.status} ${responseText}`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch user data: ${response.status} ${responseText}`);
     }
 
-    // Parse the response text as JSON
-    let userData;
     try {
-      userData = JSON.parse(responseText);
-      console.log("User ID received:", userData.id ? "Yes" : "No");
-      console.log("Username received:", userData.username ? "Yes" : "No");
+      const userData = JSON.parse(responseText);
+      if (!userData || !userData.id) {
+        throw new Error("Invalid user data format");
+      }
+      
+      console.log("User data successfully fetched");
+      
+      return new Response(JSON.stringify(userData), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     } catch (e) {
-      console.error("Failed to parse user data as JSON:", e);
-      throw new Error(`Invalid user data format: ${responseText}`);
+      console.error("Error parsing user data:", e);
+      throw new Error(`Failed to parse user data: ${e.message}`);
     }
-    
-    if (!userData.id) {
-      throw new Error("Invalid user data received from Kick");
-    }
-    
-    console.log("User data fetch successful");
-    
-    return new Response(JSON.stringify(userData), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
   } catch (error) {
     console.error("Error in kick-user function:", error.message);
     return new Response(
       JSON.stringify({ error: error.message }),
       {
         status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );
   }
