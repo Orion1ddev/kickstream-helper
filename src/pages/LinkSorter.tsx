@@ -1,4 +1,3 @@
-
 import { Navbar } from "@/components/Navbar";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -8,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { useState } from "react";
 import { Loader2, ExternalLink, Trash2, Copy, Check } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Link {
   id: string;
@@ -38,7 +38,6 @@ const LinkSorter = () => {
     setIsLoading(true);
     
     try {
-      // Extract channel name from URL if needed
       let channelName = channelUrl;
       if (channelUrl.includes('kick.com/')) {
         channelName = channelUrl.split('kick.com/')[1].split('/')[0].trim();
@@ -52,7 +51,6 @@ const LinkSorter = () => {
         throw new Error(error.message);
       }
 
-      // Process messages to extract links
       const links: Link[] = [];
       const seen = new Set<string>();
 
@@ -60,13 +58,11 @@ const LinkSorter = () => {
         data.messages.forEach((msg: any) => {
           if (!msg.content) return;
           
-          // Simple URL extraction regex
           const urlRegex = /(https?:\/\/[^\s]+)/g;
           const matches = msg.content.match(urlRegex);
           
           if (matches) {
             matches.forEach((url: string) => {
-              // Deduplicate links
               if (!seen.has(url)) {
                 seen.add(url);
                 links.push({
@@ -110,7 +106,6 @@ const LinkSorter = () => {
         title: "Link copied",
         description: "Link copied to clipboard",
       });
-      // Reset the copied state after 2 seconds
       setTimeout(() => setCopiedId(null), 2000);
     } catch (err) {
       toast({
