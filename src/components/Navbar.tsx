@@ -1,7 +1,7 @@
 
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
-import { LogOut } from "lucide-react";
+import { LogOut, Link as LinkIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 
 export function Navbar() {
@@ -20,6 +20,10 @@ export function Navbar() {
         <nav className="flex items-center gap-4">
           {isAuthenticated ? (
             <div className="flex items-center gap-4">
+              <Link to="/link-sorter" className="flex items-center gap-1">
+                <LinkIcon className="h-4 w-4" />
+                <span className="hidden md:inline">Link Sorter</span>
+              </Link>
               {user?.avatar_url && (
                 <div className="relative h-8 w-8 rounded-full overflow-hidden border-2 border-kick">
                   <img 

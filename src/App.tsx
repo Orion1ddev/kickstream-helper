@@ -11,6 +11,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
+import LinkSorter from "./pages/LinkSorter";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -29,6 +30,11 @@ const App = () => (
               <Route path="/dashboard" element={
                 <ProtectedRoute>
                   <Dashboard />
+                </ProtectedRoute>
+              } />
+              <Route path="/link-sorter" element={
+                <ProtectedRoute>
+                  <LinkSorter />
                 </ProtectedRoute>
               } />
               <Route path="*" element={<NotFound />} />
