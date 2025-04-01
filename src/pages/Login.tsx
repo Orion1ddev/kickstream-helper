@@ -3,19 +3,37 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
-import { Navigate, useSearchParams, useLocation, useNavigate } from "react-router-dom";
+import { Navigate, useSearchParams, useLocation } from "react-router-dom";
 import { Navbar } from "@/components/Navbar";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Info, AlertCircle, Loader2 } from "lucide-react";
+import { Info, AlertCircle, Loader2, MessageSquare } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
+// Helper to format auth logs for display
+const formatAuthLogs = (logs: string[]): string => {
+  return logs.join('\n\n');
+};
+
 const Login = () => {
-  const { login, isAuthenticated, loading, error } = useAuth();
+  const { login, isAuthenticated, loading, error, lastAuthLog } = useAuth();
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [searchParams] = useSearchParams();
+  const [showDebugInfo, setShowDebugInfo] = useState(false);
+  const [authLogs, setAuthLogs] = useState<string[]>([]);
   const { toast } = useToast();
   const location = useLocation();
-  const navigate = useNavigate();
+  
+  // Check for auth logs in localStorage
+  useEffect(() => {
+    try {
+      const storedLogs = localStorage.getItem("kickstream_auth_logs");
+      if (storedLogs) {
+        setAuthLogs(JSON.parse(storedLogs));
+      }
+    } catch (e) {
+      console.error("Error loading auth logs:", e);
+    }
+  }, [lastAuthLog]); // Refresh when lastAuthLog changes
   
   // Check for auth errors in URL parameters
   useEffect(() => {
@@ -39,13 +57,9 @@ const Login = () => {
     login();
   };
 
-  // When successfully authenticated, navigate to dashboard or the page they tried to access
-  useEffect(() => {
-    if (isAuthenticated && !loading) {
-      const from = location.state?.from || "/dashboard";
-      navigate(from, { replace: true });
-    }
-  }, [isAuthenticated, loading, navigate, location]);
+  const toggleDebugInfo = () => {
+    setShowDebugInfo(!showDebugInfo);
+  };
 
   if (loading) {
     return (
@@ -59,7 +73,8 @@ const Login = () => {
   }
 
   if (isAuthenticated) {
-    return <Navigate to="/dashboard" replace />;
+    const from = location.state?.from || "/dashboard";
+    return <Navigate to={from} replace />;
   }
 
   return (
@@ -117,7 +132,26 @@ const Login = () => {
                   </>
                 )}
               </Button>
+
+              <Button 
+                onClick={toggleDebugInfo} 
+                variant="outline" 
+                className="text-xs h-8"
+                type="button"
+              >
+                <MessageSquare className="h-3 w-3 mr-1" />
+                {showDebugInfo ? "Hide Debug Info" : "Show Debug Info"}
+              </Button>
             </div>
+            
+            {showDebugInfo && authLogs.length > 0 && (
+              <Alert className="bg-muted/70 border border-border/50 overflow-auto max-h-60">
+                <AlertTitle className="text-xs font-mono">Authentication Logs</AlertTitle>
+                <AlertDescription className="whitespace-pre-wrap text-xs font-mono mt-2">
+                  {formatAuthLogs(authLogs)}
+                </AlertDescription>
+              </Alert>
+            )}
             
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
