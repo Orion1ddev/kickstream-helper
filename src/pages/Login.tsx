@@ -39,8 +39,11 @@ const Login = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="h-16 w-16 rounded-full bg-kick/20 animate-pulse-green"></div>
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-16 w-16 rounded-full bg-kick/20 animate-pulse-green"></div>
+          <p className="text-muted-foreground animate-pulse">Checking login status...</p>
+        </div>
       </div>
     );
   }
@@ -50,18 +53,21 @@ const Login = () => {
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-background">
       <Navbar />
       
       <main className="flex-1 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
+        <Card className="w-full max-w-md border border-border/40 shadow-lg">
           <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl font-bold">Login to KickStream Helper</CardTitle>
-            <CardDescription>
+            <div className="flex items-center justify-center mb-4">
+              <div className="h-12 w-12 rounded-full bg-kick animate-pulse-green mr-3"></div>
+              <CardTitle className="text-2xl font-bold">KickStream Helper</CardTitle>
+            </div>
+            <CardDescription className="text-center text-base">
               Connect your Kick.com account to access streaming tools and analytics
             </CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-4">
+          <CardContent className="grid gap-6">
             {error && (
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
@@ -73,18 +79,20 @@ const Login = () => {
             <div className="grid grid-cols-1 gap-4">
               <Button 
                 onClick={handleLogin} 
-                className="w-full bg-kick hover:bg-kick/90 text-black"
+                className="w-full h-12 text-base"
+                variant="kick"
+                size="xl"
                 disabled={isLoggingIn}
               >
                 {isLoggingIn ? (
                   <>
-                    <span className="mr-2 h-4 w-4 rounded-full border-2 border-current border-r-transparent animate-spin" />
+                    <span className="mr-2 h-5 w-5 rounded-full border-2 border-current border-r-transparent animate-spin" />
                     Connecting...
                   </>
                 ) : (
                   <>
                     <svg
-                      className="mr-2 h-5 w-5"
+                      className="h-6 w-6"
                       viewBox="0 0 24 24"
                       fill="none"
                       xmlns="http://www.w3.org/2000/svg"
@@ -103,23 +111,24 @@ const Login = () => {
             
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t" />
+                <span className="w-full border-t border-border/30" />
               </div>
               <div className="relative flex justify-center text-xs uppercase">
                 <span className="bg-card px-2 text-muted-foreground">Secure Login</span>
               </div>
             </div>
             
-            <div className="text-xs text-muted-foreground space-y-2">
-              <p className="text-center">
-                By continuing, you agree to our Terms of Service and Privacy Policy.
-              </p>
-              <Alert className="bg-muted/50">
+            <div className="text-sm text-muted-foreground space-y-4">
+              <Alert className="bg-muted/50 border border-border/30">
                 <Info className="h-4 w-4" />
-                <AlertDescription className="text-xs">
-                  You will be redirected to Kick.com to authorize this application.
+                <AlertDescription className="text-sm">
+                  You will be redirected to Kick.com to authorize this application. Your login session will be remembered for future visits.
                 </AlertDescription>
               </Alert>
+              
+              <p className="text-center text-xs">
+                By continuing, you agree to our Terms of Service and Privacy Policy.
+              </p>
             </div>
           </CardContent>
         </Card>

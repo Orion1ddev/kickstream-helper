@@ -53,6 +53,17 @@ serve(async (req) => {
       const responseText = await response.text();
       console.log("Response body:", responseText);
       
+      // Check if token is invalid based on response
+      if (response.status === 401) {
+        return new Response(
+          JSON.stringify({ error: "Token is invalid or expired" }),
+          {
+            status: 401,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
+      }
+      
       // Fall back to mock data if we couldn't fetch the real data
       // This is a temporary solution to let users log in while we fix the API access
       console.log("Using mock user data as fallback");
