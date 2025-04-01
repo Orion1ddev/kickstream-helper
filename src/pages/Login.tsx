@@ -6,7 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Navigate, useSearchParams } from "react-router-dom";
 import { Navbar } from "@/components/Navbar";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Info, AlertCircle } from "lucide-react";
+import { Info, AlertCircle, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const Login = () => {
@@ -41,8 +41,8 @@ const Login = () => {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <div className="flex flex-col items-center gap-4">
-          <div className="h-16 w-16 rounded-full bg-kick/20 animate-pulse-green"></div>
-          <p className="text-muted-foreground animate-pulse">Checking login status...</p>
+          <Loader2 className="h-16 w-16 text-kick animate-spin" />
+          <p className="text-muted-foreground">Checking login status...</p>
         </div>
       </div>
     );
@@ -56,9 +56,9 @@ const Login = () => {
     <div className="min-h-screen flex flex-col bg-background">
       <Navbar />
       
-      <main className="flex-1 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md border border-border/40 shadow-lg">
-          <CardHeader className="space-y-1">
+      <main className="flex-1 flex items-center justify-center p-4 bg-gradient-to-b from-background to-background/90">
+        <Card className="w-full max-w-md border border-border/40 shadow-lg backdrop-blur-sm bg-card/95">
+          <CardHeader className="space-y-1 pb-6">
             <div className="flex items-center justify-center mb-4">
               <div className="h-12 w-12 rounded-full bg-kick animate-pulse-green mr-3"></div>
               <CardTitle className="text-2xl font-bold">KickStream Helper</CardTitle>
@@ -69,7 +69,7 @@ const Login = () => {
           </CardHeader>
           <CardContent className="grid gap-6">
             {error && (
-              <Alert variant="destructive">
+              <Alert variant="destructive" className="animate-fadeIn">
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>Authentication Error</AlertTitle>
                 <AlertDescription>{error}</AlertDescription>
@@ -79,14 +79,14 @@ const Login = () => {
             <div className="grid grid-cols-1 gap-4">
               <Button 
                 onClick={handleLogin} 
-                className="w-full h-12 text-base"
+                className="w-full h-12 text-base transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
                 variant="kick"
                 size="xl"
                 disabled={isLoggingIn}
               >
                 {isLoggingIn ? (
                   <>
-                    <span className="mr-2 h-5 w-5 rounded-full border-2 border-current border-r-transparent animate-spin" />
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                     Connecting...
                   </>
                 ) : (

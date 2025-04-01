@@ -17,15 +17,18 @@ serve(async (req) => {
   }
 
   try {
-    const { code, code_verifier } = await req.json();
+    const { code, code_verifier, redirect_uri } = await req.json();
     
     if (!code) {
       throw new Error("No authorization code provided");
     }
 
+    // Use the provided redirect_uri or fall back to the default
+    const effectiveRedirectUri = redirect_uri || REDIRECT_URL;
+
     console.log("Exchanging code for token");
     console.log("Using clientId:", CLIENT_ID);
-    console.log("Using redirect:", REDIRECT_URL);
+    console.log("Using redirect:", effectiveRedirectUri);
     console.log("Code verifier provided:", code_verifier ? "Yes" : "No");
     
     // Create form data for the token request (OAuth standard)
@@ -33,7 +36,7 @@ serve(async (req) => {
     formData.append("grant_type", "authorization_code");
     formData.append("client_id", CLIENT_ID);
     formData.append("client_secret", CLIENT_SECRET);
-    formData.append("redirect_uri", REDIRECT_URL);
+    formData.append("redirect_uri", effectiveRedirectUri);
     formData.append("code", code);
     
     // Add code_verifier if provided (for PKCE flow)
@@ -68,6 +71,7 @@ serve(async (req) => {
       data = JSON.parse(responseText);
       console.log("Access token received:", data.access_token ? "Yes" : "No");
       console.log("Refresh token received:", data.refresh_token ? "Yes" : "No");
+      console.log("Token scopes:", data.scope);
     } catch (e) {
       console.error("Failed to parse response as JSON:", e);
       throw new Error(`Invalid response format: ${responseText}`);
