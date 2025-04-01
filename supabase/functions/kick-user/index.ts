@@ -6,7 +6,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Define a more complete user profile type
 interface KickUserProfile {
   id: string;
   username: string;
@@ -31,9 +30,8 @@ serve(async (req) => {
 
     console.log("Fetching user data with access token");
 
-    // Try multiple approaches to fetch user data
+    // Try the v2 API first
     try {
-      // First approach with direct API call
       const response = await fetch('https://kick.com/api/v2/user/me', {
         method: 'GET',
         headers: {
@@ -41,35 +39,49 @@ serve(async (req) => {
           'Accept': 'application/json',
           'Content-Type': 'application/json',
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-          'Origin': 'https://kick.com',
-          'Referer': 'https://kick.com/',
         },
       });
 
-      console.log("User data response status:", response.status);
+      console.log("V2 API response status:", response.status);
       
       if (response.ok) {
         try {
           const userData = await response.json();
-          console.log("User data successfully fetched from API");
+          console.log("User data successfully fetched from V2 API");
           
           return new Response(JSON.stringify(userData), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
         } catch (jsonError) {
-          console.error("Error parsing API response as JSON:", jsonError);
-          // Continue to fallback approach
+          console.error("Error parsing V2 API response as JSON:", jsonError);
         }
       }
       
-      // Log response details for debugging
-      console.log("Headers received:", JSON.stringify(Object.fromEntries([...response.headers])));
-      const responseText = await response.text();
-      console.log("Response body length:", responseText.length);
-      console.log("Response body preview:", responseText.substring(0, 200) + "...");
+      // If we reach here, the v2 API request failed - try v1 API
+      console.log("Trying V1 API endpoint instead");
+      const v1Response = await fetch('https://kick.com/api/v1/user', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${access_token}`,
+          'Accept': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+        },
+      });
       
-      // Check if token is invalid based on response
-      if (response.status === 401) {
+      console.log("V1 API response status:", v1Response.status);
+      
+      if (v1Response.ok) {
+        const userData = await v1Response.json();
+        console.log("User data successfully fetched from V1 API endpoint");
+        
+        return new Response(JSON.stringify(userData), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      // If both API calls failed, the token might be invalid
+      if (response.status === 401 || v1Response.status === 401) {
+        console.log("Token appears to be invalid (401 status received)");
         return new Response(
           JSON.stringify({ error: "Token is invalid or expired" }),
           {
@@ -79,33 +91,10 @@ serve(async (req) => {
         );
       }
       
-      // Make a second attempt with a different endpoint if available
-      try {
-        const alternativeResponse = await fetch('https://kick.com/api/v1/user', {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${access_token}`,
-            'Accept': 'application/json',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-          },
-        });
-        
-        if (alternativeResponse.ok) {
-          const userData = await alternativeResponse.json();
-          console.log("User data successfully fetched from alternative API endpoint");
-          
-          return new Response(JSON.stringify(userData), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
-        }
-      } catch (altError) {
-        console.log("Alternative endpoint also failed:", altError);
-      }
-      
-      // Fall back to extracting data from token or using mock data
-      // Try to decode the JWT token to extract user info if possible
-      console.log("Extracting user info from JWT token if possible...");
+      // Try extracting user info from the JWT token itself
+      console.log("Attempting to extract user info from JWT token...");
       let userId = "";
+      let username = "";
       try {
         const tokenParts = access_token.split('.');
         if (tokenParts.length === 3) {
@@ -114,29 +103,44 @@ serve(async (req) => {
           if (payload.sub) {
             userId = payload.sub;
           }
+          if (payload.name) {
+            username = payload.name;
+          }
         }
       } catch (tokenError) {
         console.log("Could not extract user info from token:", tokenError);
       }
       
-      // Fall back to mock data as last resort
-      console.log("Using enhanced mock user data as fallback");
-      const mockUserData: KickUserProfile = {
-        id: userId || "temp-" + Math.random().toString(36).substring(2, 15),
-        username: "kickuser_" + Math.random().toString(36).substring(2, 7),
-        profile_pic: "https://static.kick.com/images/user/default-profile.png",
-        email: "user@example.com", // This is just a placeholder
-        verified: true,
-      };
+      // If we've extracted usable info from the token, use it
+      if (userId || username) {
+        console.log("Using information extracted from JWT token");
+        const userData: KickUserProfile = {
+          id: userId || `unknown-${Date.now()}`,
+          username: username || `user-${userId.substring(0, 6)}`,
+          profile_pic: "https://static.kick.com/images/user/default-profile.png",
+          verified: true,
+        };
+        
+        return new Response(JSON.stringify(userData), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
       
-      // Verify this mock data works with our app by including all required fields
-      console.log("Returning mock user data:", mockUserData);
-      
-      return new Response(JSON.stringify(mockUserData), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      // Last resort - notify client that we couldn't get user info but token seems valid
+      console.log("Returning generic response as we couldn't get user info but token seems valid");
+      return new Response(
+        JSON.stringify({ 
+          error: "Could not fetch user data, but token appears valid",
+          valid_token: true,
+          generated_id: `user-${Date.now()}`,
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
     } catch (fetchError) {
-      console.error("Error fetching user data:", fetchError);
+      console.error("Error during API calls:", fetchError);
       throw new Error(`Error fetching user data: ${fetchError.message}`);
     }
   } catch (error) {

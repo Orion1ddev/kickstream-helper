@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
-import { Navigate, useSearchParams } from "react-router-dom";
+import { Navigate, useSearchParams, useLocation, useNavigate } from "react-router-dom";
 import { Navbar } from "@/components/Navbar";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Info, AlertCircle, Loader2 } from "lucide-react";
@@ -14,6 +14,8 @@ const Login = () => {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
+  const location = useLocation();
+  const navigate = useNavigate();
   
   // Check for auth errors in URL parameters
   useEffect(() => {
@@ -37,12 +39,20 @@ const Login = () => {
     login();
   };
 
+  // When successfully authenticated, navigate to dashboard or the page they tried to access
+  useEffect(() => {
+    if (isAuthenticated && !loading) {
+      const from = location.state?.from || "/dashboard";
+      navigate(from, { replace: true });
+    }
+  }, [isAuthenticated, loading, navigate, location]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="h-16 w-16 text-kick animate-spin" />
-          <p className="text-muted-foreground">Checking login status...</p>
+          <p className="text-muted-foreground text-lg">Checking login status...</p>
         </div>
       </div>
     );
@@ -92,7 +102,7 @@ const Login = () => {
                 ) : (
                   <>
                     <svg
-                      className="h-6 w-6"
+                      className="h-6 w-6 mr-2"
                       viewBox="0 0 24 24"
                       fill="none"
                       xmlns="http://www.w3.org/2000/svg"

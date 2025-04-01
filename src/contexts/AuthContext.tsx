@@ -2,6 +2,7 @@
 import React, { createContext, useState, useContext, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { useNavigate } from "react-router-dom";
 
 interface User {
   id: string;
@@ -55,6 +56,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   // Enhanced session check
   useEffect(() => {
@@ -70,19 +72,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           console.log("Restored user from localStorage:", parsedUser.username);
           
           // Verify if the access token is still valid by making a test call
-          // We'll do this silently in the background to avoid blocking the UI
           try {
             const { data: userData, error: userError } = await supabase.functions.invoke('kick-user', {
               body: { access_token: parsedUser.access_token },
             });
             
-            if (userError || !userData) {
-              console.log("Stored token may be invalid, will attempt refresh if available");
+            if (userError) {
+              console.log("Error verifying token:", userError);
+              // Clear the user session if token verification failed
+              clearAuthStorage();
+              setUser(null);
+              return;
+            }
+            
+            if (!userData || userData.error) {
+              console.log("Stored token may be invalid:", userData?.error || "No user data returned");
               if (parsedUser.refresh_token) {
-                // TODO: Implement token refresh logic if needed in the future
                 console.log("Token refresh would be implemented here");
+                // TODO: Implement token refresh in the future
               } else {
-                // If no refresh token, session is truly invalid
                 console.log("No refresh token available, user will need to login again");
                 clearAuthStorage();
                 setUser(null);
@@ -92,6 +100,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               // Update user data with latest from API
               const updatedUser = {
                 ...parsedUser,
+                id: userData.id || parsedUser.id,
                 username: userData.username || parsedUser.username,
                 avatar_url: userData.profile_pic || parsedUser.avatar_url,
                 email: userData.email || parsedUser.email
@@ -101,15 +110,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
           } catch (verifyError) {
             console.error("Error verifying token:", verifyError);
-            // Keep the user logged in but make a note in the console
-            // This way, if it's just a temporary API issue, we don't log them out
-            console.log("Keeping user logged in despite verification error");
+            // Token verification failed completely, clear the session
+            clearAuthStorage();
+            setUser(null);
           }
         } else {
           console.log("No user found in localStorage");
         }
       } catch (error) {
         console.error("Failed to restore auth state:", error);
+        clearAuthStorage();
+        setUser(null);
       } finally {
         setLoading(false);
       }
@@ -188,6 +199,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         
         // Get the current redirect URI that we used
+        // Always use exactly the same redirect URI that was used in the initial request
         const redirectUri = window.location.origin + "/login";
         
         // Exchange code for token using Supabase Edge Function
@@ -201,7 +213,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
 
         // Clean up PKCE and state values
-        clearAuthStorage();
+        localStorage.removeItem("kickstream_oauth_state");
+        localStorage.removeItem("kickstream_code_verifier");
 
         if (tokenError) {
           console.error("Token exchange error:", tokenError);
@@ -228,15 +241,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         console.log("User profile response received:", userData);
         
-        if (!userData || !userData.id) {
+        if (!userData || (!userData.id && !userData.generated_id)) {
           console.error("Invalid user data:", userData);
           throw new Error("Invalid user data returned from API");
         }
         
         const userProfile = {
-          id: userData.id.toString(),
-          username: userData.username,
-          avatar_url: userData.profile_pic,
+          id: userData.id?.toString() || userData.generated_id || `user-${Date.now()}`,
+          username: userData.username || userData.name || `user-${Date.now().toString(36).substring(2, 7)}`,
+          avatar_url: userData.profile_pic || userData.avatar || "https://static.kick.com/images/user/default-profile.png",
           email: userData.email,
           access_token: tokenData.access_token,
           refresh_token: tokenData.refresh_token,
@@ -249,6 +262,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           title: "Login Successful",
           description: `Welcome, ${userProfile.username}!`,
         });
+        
+        // Navigate to dashboard
+        navigate("/dashboard");
       } catch (error: any) {
         console.error("Failed to complete authentication:", error);
         setError(error.message || "Failed to complete login process. Please try again.");
@@ -264,7 +280,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     handleOAuthRedirect();
-  }, [toast]);
+  }, [toast, navigate]);
 
   const login = async () => {
     try {
@@ -321,6 +337,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       title: "Logged Out",
       description: "You have been successfully logged out.",
     });
+    navigate("/login");
   };
 
   return (
