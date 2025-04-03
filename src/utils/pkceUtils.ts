@@ -1,7 +1,10 @@
 
-// PKCE authentication utilities for KickStream Helper
+/**
+ * PKCE (Proof Key for Code Exchange) authentication utilities
+ * Used for secure OAuth flows with Kick.com
+ */
 
-// Generate a random code verifier for PKCE flow
+// Generate a random code verifier for PKCE flow (cryptographically secure random string)
 export const generateCodeVerifier = (): string => {
   const array = new Uint8Array(32);
   crypto.getRandomValues(array);
@@ -15,7 +18,7 @@ export const sha256 = async (plain: string): Promise<ArrayBuffer> => {
   return await crypto.subtle.digest('SHA-256', data);
 };
 
-// Convert ArrayBuffer to base64url encoding
+// Convert ArrayBuffer to base64url encoding (URL-safe base64)
 export const base64urlencode = (buffer: ArrayBuffer): string => {
   return btoa(String.fromCharCode(...new Uint8Array(buffer)))
     .replace(/\+/g, '-')
@@ -23,9 +26,12 @@ export const base64urlencode = (buffer: ArrayBuffer): string => {
     .replace(/=+$/, '');
 };
 
-// Build the Kick authorization URL with PKCE parameters
+/**
+ * Build the Kick authorization URL with PKCE parameters
+ * This creates the URL that the user will be redirected to for authentication
+ */
 export const buildKickAuthUrl = async (codeVerifier: string, state: string): Promise<string> => {
-  // Generate code challenge from verifier
+  // Generate code challenge from verifier using SHA-256
   const codeChallenge = await sha256(codeVerifier).then(base64urlencode);
   
   // Set up Kick OAuth parameters

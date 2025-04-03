@@ -1,4 +1,7 @@
-// Auth utility functions for KickStream Helper
+/**
+ * Auth utility functions for KickStream Helper
+ * Handles various authentication operations and user profile management
+ */
 import { supabase } from "@/integrations/supabase/client";
 
 export interface User {
@@ -10,7 +13,17 @@ export interface User {
   email?: string;
 }
 
-// Helper to clear all auth-related localStorage items
+/**
+ * Logs related to authentication operations
+ * Stored in localStorage for debugging purposes
+ */
+interface AuthLog {
+  timestamp: string;
+  message: string;
+  data?: any;
+}
+
+// Clears all auth-related localStorage items
 export const clearAuthStorage = () => {
   saveAuthLog("Clearing auth storage");
   localStorage.removeItem("kickstream_user");
@@ -18,16 +31,26 @@ export const clearAuthStorage = () => {
   localStorage.removeItem("kickstream_code_verifier");
 };
 
+// Retrieves stored authentication logs
+export const getAuthLogs = (): AuthLog[] => {
+  try {
+    const logsJson = localStorage.getItem("kickstream_auth_logs");
+    return logsJson ? JSON.parse(logsJson) : [];
+  } catch (e) {
+    console.error("Error parsing auth logs:", e);
+    return [];
+  }
+};
+
 // Helper to store auth logs for better debugging
-export const saveAuthLog = (message: string, data?: any) => {
+export const saveAuthLog = (message: string, data?: any): string => {
   const timestamp = new Date().toISOString();
   const logEntry = `${timestamp} - ${message}${data ? `: ${JSON.stringify(data)}` : ''}`;
   console.log(logEntry);
   
   // Store recent logs in localStorage for debugging
-  const existingLogs = localStorage.getItem("kickstream_auth_logs") || "[]";
-  const logs = JSON.parse(existingLogs);
-  logs.push(logEntry);
+  const logs = getAuthLogs();
+  logs.push({ timestamp, message, data });
   
   // Keep only the most recent 20 logs
   while (logs.length > 20) {
@@ -36,6 +59,22 @@ export const saveAuthLog = (message: string, data?: any) => {
   
   localStorage.setItem("kickstream_auth_logs", JSON.stringify(logs));
   return logEntry;
+};
+
+// Retrieves the stored user from localStorage
+export const getStoredUser = (): User | null => {
+  try {
+    const storedUser = localStorage.getItem("kickstream_user");
+    return storedUser ? JSON.parse(storedUser) : null;
+  } catch (error) {
+    console.error("Error parsing stored user:", error);
+    return null;
+  }
+};
+
+// Saves user data to localStorage
+export const saveUserToStorage = (user: User): void => {
+  localStorage.setItem("kickstream_user", JSON.stringify(user));
 };
 
 // Verifies a user session by testing the access token
@@ -102,7 +141,7 @@ export const fetchUserProfile = async (accessToken: string) => {
 };
 
 // Create user profile object from API response
-export const createUserProfile = (userData: any, tokenData: any) => {
+export const createUserProfile = (userData: any, tokenData: any): User => {
   return {
     id: userData.id?.toString() || userData.generated_id || `user-${Date.now()}`,
     username: userData.username || userData.name || `user-${Date.now().toString(36).substring(2, 7)}`,
