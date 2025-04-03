@@ -54,11 +54,60 @@ const Login = () => {
 
   const handleLogin = () => {
     setIsLoggingIn(true);
+    
+    // Create new auth log entry in localStorage
+    try {
+      const timestamp = new Date().toISOString();
+      const logEntry = `${timestamp} - Login button clicked, starting authentication flow`;
+      
+      const existingLogs = localStorage.getItem("kickstream_auth_logs") || "[]";
+      const logs = JSON.parse(existingLogs);
+      logs.push(logEntry);
+      
+      while (logs.length > 20) {
+        logs.shift();
+      }
+      
+      localStorage.setItem("kickstream_auth_logs", JSON.stringify(logs));
+      setAuthLogs(logs);
+    } catch (e) {
+      console.error("Error updating auth logs:", e);
+    }
+    
     login();
   };
 
   const toggleDebugInfo = () => {
     setShowDebugInfo(!showDebugInfo);
+  };
+
+  const clearAuthStorage = () => {
+    try {
+      localStorage.removeItem("kickstream_user");
+      localStorage.removeItem("kickstream_oauth_state");
+      localStorage.removeItem("kickstream_code_verifier");
+      
+      const timestamp = new Date().toISOString();
+      const logEntry = `${timestamp} - Auth storage cleared manually`;
+      
+      const existingLogs = localStorage.getItem("kickstream_auth_logs") || "[]";
+      const logs = JSON.parse(existingLogs);
+      logs.push(logEntry);
+      
+      while (logs.length > 20) {
+        logs.shift();
+      }
+      
+      localStorage.setItem("kickstream_auth_logs", JSON.stringify(logs));
+      setAuthLogs(logs);
+      
+      toast({
+        title: "Auth Storage Cleared",
+        description: "All authentication data has been cleared. Please try logging in again.",
+      });
+    } catch (e) {
+      console.error("Error clearing auth storage:", e);
+    }
   };
 
   if (loading) {
@@ -133,24 +182,54 @@ const Login = () => {
                 )}
               </Button>
 
-              <Button 
-                onClick={toggleDebugInfo} 
-                variant="outline" 
-                className="text-xs h-8"
-                type="button"
-              >
-                <MessageSquare className="h-3 w-3 mr-1" />
-                {showDebugInfo ? "Hide Debug Info" : "Show Debug Info"}
-              </Button>
+              <div className="flex gap-2">
+                <Button 
+                  onClick={toggleDebugInfo} 
+                  variant="outline" 
+                  className="text-xs h-8 flex-1"
+                  type="button"
+                >
+                  <MessageSquare className="h-3 w-3 mr-1" />
+                  {showDebugInfo ? "Hide Debug Info" : "Show Debug Info"}
+                </Button>
+                
+                <Button 
+                  onClick={clearAuthStorage} 
+                  variant="outline" 
+                  className="text-xs h-8 text-destructive"
+                  type="button"
+                >
+                  Clear Auth Data
+                </Button>
+              </div>
             </div>
             
-            {showDebugInfo && authLogs.length > 0 && (
-              <Alert className="bg-muted/70 border border-border/50 overflow-auto max-h-60">
-                <AlertTitle className="text-xs font-mono">Authentication Logs</AlertTitle>
-                <AlertDescription className="whitespace-pre-wrap text-xs font-mono mt-2">
-                  {formatAuthLogs(authLogs)}
-                </AlertDescription>
-              </Alert>
+            {showDebugInfo && (
+              <>
+                <Alert className="bg-muted/70 border border-border/50">
+                  <AlertTitle className="text-xs font-mono flex items-center justify-between">
+                    <span>Authentication Debug Information</span>
+                  </AlertTitle>
+                  <AlertDescription className="text-xs mt-2">
+                    <p className="font-medium">Login Parameters:</p>
+                    <ul className="list-disc pl-5 mt-1 space-y-1">
+                      <li>Client ID: 01JQMD5PMFX0MFYPMT9A7YDHGC</li>
+                      <li>Redirect URI: {window.location.origin}/login</li>
+                      <li>Using PKCE flow: Yes</li>
+                      <li>Current URL: {window.location.href}</li>
+                    </ul>
+                  </AlertDescription>
+                </Alert>
+                
+                {authLogs.length > 0 && (
+                  <Alert className="bg-muted/70 border border-border/50 overflow-auto max-h-60">
+                    <AlertTitle className="text-xs font-mono">Authentication Logs</AlertTitle>
+                    <AlertDescription className="whitespace-pre-wrap text-xs font-mono mt-2">
+                      {formatAuthLogs(authLogs)}
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </>
             )}
             
             <div className="relative">

@@ -30,9 +30,8 @@ serve(async (req) => {
 
     console.log("Fetching user data with access token");
 
-    // Try mock data first (for development and when Kick's API is unstable)
-    // This helps ensure the app works while we're debugging issues with Kick's API
-    const useMockData = true;  // Temporary solution while we resolve Kick API issues
+    // Try mock data only as a last resort fallback, not by default
+    const useMockData = false;  // Changed from true to false to prioritize real API
     
     if (useMockData) {
       console.log("Using enhanced mock user data as fallback");
@@ -78,6 +77,7 @@ serve(async (req) => {
 
     // Try the v2 API first
     try {
+      console.log("Trying Kick v2 API with token");
       const response = await fetch('https://kick.com/api/v2/user/me', {
         method: 'GET',
         headers: {
@@ -146,6 +146,32 @@ serve(async (req) => {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           }
         );
+      }
+      
+      // Try alternative Kick endpoint
+      try {
+        console.log("Trying alternative Kick user endpoint");
+        const altResponse = await fetch('https://kick.com/api/user', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${access_token}`,
+            'Accept': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+          },
+        });
+        
+        console.log("Alternative API response status:", altResponse.status);
+        
+        if (altResponse.ok) {
+          const userData = await altResponse.json();
+          console.log("User data successfully fetched from alternative API endpoint");
+          
+          return new Response(JSON.stringify(userData), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+      } catch (altError) {
+        console.error("Error with alternative API endpoint:", altError);
       }
       
       // Try extracting user info from the JWT token itself as fallback

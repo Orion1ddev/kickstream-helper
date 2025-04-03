@@ -1,3 +1,4 @@
+
 import { Navbar } from "@/components/Navbar";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -5,9 +6,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
-import { Loader2, ExternalLink, Trash2, Copy, Check } from "lucide-react";
+import { Loader2, ExternalLink, Trash2, Copy, Check, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface Link {
   id: string;
@@ -23,6 +25,7 @@ const LinkSorter = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [channelLinks, setChannelLinks] = useState<Link[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const { toast } = useToast();
 
   const fetchChannelLinks = async () => {
@@ -36,20 +39,36 @@ const LinkSorter = () => {
     }
 
     setIsLoading(true);
+    setErrorMessage(null);
     
     try {
       let channelName = channelUrl;
+      // Extract channel name from URL if it's a full URL
       if (channelUrl.includes('kick.com/')) {
         channelName = channelUrl.split('kick.com/')[1].split('/')[0].trim();
       }
+      
+      // Additional validation
+      if (!channelName || channelName.includes('http')) {
+        throw new Error("Invalid channel name. Please enter a valid Kick channel URL or name.");
+      }
+
+      console.log("Fetching links for channel:", channelName);
 
       const { data, error } = await supabase.functions.invoke('kick-chat', {
         body: { channel: channelName }
       });
 
       if (error) {
-        throw new Error(error.message);
+        console.error("Error from kick-chat function:", error);
+        throw new Error(error.message || "Failed to fetch channel data");
       }
+
+      if (!data) {
+        throw new Error("No data received from the server");
+      }
+
+      console.log("Received channel data:", data);
 
       const links: Link[] = [];
       const seen = new Set<string>();
@@ -78,11 +97,27 @@ const LinkSorter = () => {
         });
       }
 
+      console.log(`Found ${links.length} links in channel`);
       setChannelLinks(links);
+      
+      if (links.length === 0) {
+        toast({
+          title: "No links found",
+          description: `No links were found in the chat for channel "${channelName}"`,
+        });
+      } else {
+        toast({
+          title: "Links retrieved",
+          description: `Found ${links.length} links in channel "${channelName}"`,
+        });
+      }
     } catch (error: any) {
+      console.error("Error fetching channel links:", error);
+      const errorMsg = error.message || "Failed to fetch links from channel";
+      setErrorMessage(errorMsg);
       toast({
         title: "Error fetching channel links",
-        description: error.message || "Failed to fetch links from channel",
+        description: errorMsg,
         variant: "destructive",
       });
     } finally {
@@ -160,6 +195,13 @@ const LinkSorter = () => {
                       {isLoading ? 'Fetching...' : 'Fetch Links'}
                     </Button>
                   </div>
+                  
+                  {errorMessage && (
+                    <Alert variant="destructive" className="mt-4">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>{errorMessage}</AlertDescription>
+                    </Alert>
+                  )}
                   
                   {isLoading ? (
                     <div className="flex justify-center py-8">
