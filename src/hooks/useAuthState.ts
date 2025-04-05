@@ -45,13 +45,16 @@ export const useAuthState = () => {
               id: userData.id || storedUser.id,
               username: userData.username || storedUser.username,
               avatar_url: userData.profile_pic || storedUser.avatar_url,
-              email: userData.email || storedUser.email
+              email: userData.email || storedUser.email,
+              verified: userData.verified !== undefined ? userData.verified : storedUser.verified
             };
             setUser(updatedUser);
             localStorage.setItem("kickstream_user", JSON.stringify(updatedUser));
+            logAuthEvent("Updated user profile from API", { username: updatedUser.username });
           } else {
-            logAuthEvent("Stored token appears invalid", "No user data returned");
+            logAuthEvent("Stored token is invalid", "No user data returned");
             setUser(null);
+            localStorage.removeItem("kickstream_user");
           }
         } else {
           logAuthEvent("No user found in localStorage");

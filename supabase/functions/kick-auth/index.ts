@@ -60,6 +60,7 @@ serve(async (req) => {
     
     // Check if the response was successful
     if (!tokenResponse.ok) {
+      console.error("Token exchange failed:", responseText);
       throw new Error(`Failed to exchange token: ${tokenResponse.status} ${responseText}`);
     }
 

@@ -37,7 +37,8 @@ export const buildKickAuthUrl = async (codeVerifier: string, state: string): Pro
   // Set up Kick OAuth parameters
   const CLIENT_ID = "01JQMD5PMFX0MFYPMT9A7YDHGC";
   const REDIRECT_URI = window.location.origin + "/login";
-  const SCOPES = "user:read channel:read events:read events:subscribe";
+  // Include user:read scope to access user profile information
+  const SCOPES = "user:read channel:read events:read events:subscribe chat:read";
   
   // Build the authorization URL with PKCE parameters
   const authUrl = new URL("https://id.kick.com/oauth/authorize");

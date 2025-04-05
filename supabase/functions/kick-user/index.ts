@@ -17,20 +17,47 @@ interface KickUserProfile {
   verified: boolean;
 }
 
-// Helper to generate mock user data as a fallback
-const generateMockUser = (token: string): KickUserProfile => {
-  // Generate stable random ID based on the token to maintain consistency
-  const tokenHash = Array.from(token)
-    .reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) % 1000000, 0)
-    .toString(36);
+// Try all available Kick API endpoints to fetch user data
+const fetchUserProfile = async (accessToken: string) => {
+  // API endpoints to try (in order of preference)
+  const apiEndpoints = [
+    'https://kick.com/api/v2/user/me',
+    'https://kick.com/api/v1/user',
+    'https://kick.com/api/user',
+  ];
   
-  return {
-    id: `temp-${tokenHash}`,
-    username: `kickuser_${Math.random().toString(36).substring(2, 7)}`,
-    profile_pic: "https://static.kick.com/images/user/default-profile.png",
-    email: "user@example.com",
-    verified: true
+  const headers = {
+    'Authorization': `Bearer ${accessToken}`,
+    'Accept': 'application/json',
+    'Content-Type': 'application/json',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
   };
+  
+  for (const endpoint of apiEndpoints) {
+    try {
+      console.log(`Trying Kick API endpoint: ${endpoint}`);
+      const response = await fetch(endpoint, { method: 'GET', headers });
+      
+      console.log(`${endpoint} response status:`, response.status);
+      
+      if (response.ok) {
+        const userData = await response.json();
+        console.log(`User data successfully fetched from ${endpoint}:`, JSON.stringify(userData).substring(0, 200) + "...");
+        return { success: true, data: userData };
+      }
+      
+      // If 401 unauthorized, the token is invalid
+      if (response.status === 401) {
+        const errorText = await response.text();
+        console.error("Authentication error:", errorText);
+        return { success: false, error: "Token is invalid or expired" };
+      }
+    } catch (error) {
+      console.error(`Error with ${endpoint}:`, error);
+    }
+  }
+  
+  return { success: false, error: "Failed to fetch user data from all API endpoints" };
 };
 
 // Extract user info from JWT token if possible
@@ -57,44 +84,20 @@ const extractUserFromToken = (token: string) => {
   }
 };
 
-// Try all available Kick API endpoints to fetch user data
-const tryAllKickApis = async (accessToken: string) => {
-  const apiEndpoints = [
-    'https://kick.com/api/v2/user/me',
-    'https://kick.com/api/v1/user',
-    'https://kick.com/api/user',
-  ];
+// Generate mock user data as a fallback (only for development/testing)
+const generateMockUser = (token: string): KickUserProfile => {
+  // Generate stable random ID based on the token to maintain consistency
+  const tokenHash = Array.from(token)
+    .reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) % 1000000, 0)
+    .toString(36);
   
-  const headers = {
-    'Authorization': `Bearer ${accessToken}`,
-    'Accept': 'application/json',
-    'Content-Type': 'application/json',
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+  return {
+    id: `temp-${tokenHash}`,
+    username: `kickuser_${Math.random().toString(36).substring(2, 7)}`,
+    profile_pic: "https://static.kick.com/images/user/default-profile.png",
+    email: "user@example.com",
+    verified: true
   };
-  
-  for (const endpoint of apiEndpoints) {
-    try {
-      console.log(`Trying Kick API endpoint: ${endpoint}`);
-      const response = await fetch(endpoint, { method: 'GET', headers });
-      
-      console.log(`${endpoint} response status:`, response.status);
-      
-      if (response.ok) {
-        const userData = await response.json();
-        console.log("User data successfully fetched from API endpoint:", endpoint);
-        return { success: true, data: userData };
-      }
-      
-      // If 401 unauthorized, the token is invalid
-      if (response.status === 401) {
-        return { success: false, error: "Token is invalid or expired" };
-      }
-    } catch (error) {
-      console.error(`Error with ${endpoint}:`, error);
-    }
-  }
-  
-  return { success: false, error: "Failed to fetch user data from all API endpoints" };
 };
 
 serve(async (req) => {
@@ -112,17 +115,28 @@ serve(async (req) => {
 
     console.log("Fetching user data with access token");
 
-    // Try all Kick API endpoints to get user data
-    const { success, data: userData, error } = await tryAllKickApis(access_token);
+    // Try to fetch user profile from Kick API
+    const { success, data: userData, error } = await fetchUserProfile(access_token);
     
     if (success && userData) {
-      return new Response(JSON.stringify(userData), {
+      // Format the user data consistently
+      const formattedUser = {
+        id: userData.id?.toString() || userData.user_id?.toString(),
+        username: userData.username || userData.name || userData.user?.username,
+        profile_pic: userData.profile_pic || userData.avatar || userData.user?.profile_pic,
+        email: userData.email,
+        verified: userData.verified !== undefined ? userData.verified : true
+      };
+      
+      console.log("Returning user profile:", JSON.stringify(formattedUser).substring(0, 200));
+      return new Response(JSON.stringify(formattedUser), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
     
     // If we got an authentication error, return that specifically
     if (error === "Token is invalid or expired") {
+      console.log("Token validation failed, returning 401");
       return new Response(
         JSON.stringify({ error: "Token is invalid or expired" }),
         {
@@ -144,7 +158,7 @@ serve(async (req) => {
     }
     
     // Last resort: generate mock user data to allow the app to function
-    console.log("Using mock user data as fallback");
+    console.log("Using mock user data as fallback (for development only)");
     const mockUser = generateMockUser(access_token);
     
     return new Response(JSON.stringify(mockUser), {

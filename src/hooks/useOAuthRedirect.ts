@@ -7,7 +7,8 @@ import {
   exchangeCodeForToken,
   fetchUserProfile,
   createUserProfile,
-  saveUserToStorage
+  saveUserToStorage,
+  saveAuthLog
 } from "@/utils/authUtils";
 
 interface UseOAuthRedirectProps {
@@ -53,11 +54,11 @@ export const useOAuthRedirect = ({
       setLoading(true);
       setError(null);
 
-      logAuthEvent("Processing URL params", { 
-        code: code ? "present" : "not present", 
+      logAuthEvent("Processing OAuth redirect", { 
+        hasCode: !!code, 
         error: errorParam, 
         errorDescription,
-        state: state ? "present" : "not present"
+        hasState: !!state
       });
 
       // Handle OAuth error from Kick
@@ -108,7 +109,7 @@ export const useOAuthRedirect = ({
         const redirectUri = window.location.origin + "/login";
         
         // Exchange code for token
-        const { success, data: tokenData, error: tokenError } = await exchangeCodeForToken(
+        const { success: tokenSuccess, data: tokenData, error: tokenError } = await exchangeCodeForToken(
           code, 
           codeVerifier, 
           redirectUri
@@ -118,17 +119,19 @@ export const useOAuthRedirect = ({
         localStorage.removeItem("kickstream_oauth_state");
         localStorage.removeItem("kickstream_code_verifier");
 
-        if (!success || tokenError) {
-          logAuthEvent("Token exchange error", tokenError);
-          throw new Error(`Failed to exchange authorization code: ${tokenError?.message || "Unknown error"}`);
+        if (!tokenSuccess || !tokenData) {
+          logAuthEvent("Token exchange failed", tokenError);
+          throw new Error(tokenError?.message || "Failed to exchange authorization code. Please try again.");
         }
+        
+        logAuthEvent("Token received, fetching user profile");
         
         // Get user profile with the access token
         const { success: profileSuccess, data: userData, error: userError } = await fetchUserProfile(tokenData.access_token);
 
-        if (!profileSuccess || userError) {
-          logAuthEvent("User profile fetch error", userError);
-          throw new Error(`Failed to fetch user profile: ${userError?.message || "Unknown error"}`);
+        if (!profileSuccess || !userData) {
+          logAuthEvent("User profile fetch failed", userError);
+          throw new Error(userError?.message || "Failed to fetch user profile. Please try again.");
         }
         
         // Create user profile from API response
