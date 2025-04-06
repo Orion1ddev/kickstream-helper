@@ -2,7 +2,6 @@
  * Auth utility functions for KickStream Helper
  * Handles various authentication operations and user profile management
  */
-import { fetchUserProfile, exchangeCodeForToken } from '@/utils/pkceUtils';
 
 export interface User {
   id: string;

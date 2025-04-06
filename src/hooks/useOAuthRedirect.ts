@@ -6,9 +6,10 @@ import {
   clearAuthStorage, 
   saveUserToStorage,
   saveAuthLog,
-  createUserProfile
+  createUserProfile,
+  exchangeCodeForToken,
+  fetchUserProfile
 } from "@/utils/authUtils";
-import { exchangeCodeForToken, fetchUserProfile } from "@/utils/pkceUtils";
 
 interface UseOAuthRedirectProps {
   setLoading: (loading: boolean) => void;
