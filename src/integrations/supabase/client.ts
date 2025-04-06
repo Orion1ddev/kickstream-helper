@@ -1,7 +1,7 @@
 
 /**
- * Simple mock client for API interactions
- * This replaces the Supabase dependency
+ * Mock client for API interactions
+ * This replaces the Supabase dependency with local implementation
  */
 
 interface ApiResponse<T> {

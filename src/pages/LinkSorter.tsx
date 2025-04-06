@@ -5,38 +5,27 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
-import { useState } from "react";
-import { Loader2, ExternalLink, Trash2, Copy, Check, AlertCircle } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Loader2, ExternalLink, Trash2, Copy, Check, AlertCircle, Save, BookmarkPlus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import { fetchChannelMessages, ChatMessage } from "@/services/chatService";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-
-interface Link {
-  id: string;
-  url: string;
-  title: string;
-  timestamp: string;
-  username: string;
-}
-
-interface ChatMessage {
-  content: string;
-  username: string;
-  timestamp: string;
-}
-
-interface ChatData {
-  messages: ChatMessage[];
-}
+import { Link, copyLinkToClipboard, getSavedLinks, removeLink as removeSavedLink, saveLink } from "@/services/linkService";
 
 const LinkSorter = () => {
   const { user, isAuthenticated } = useAuth();
   const [channelUrl, setChannelUrl] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [channelLinks, setChannelLinks] = useState<Link[]>([]);
+  const [savedLinks, setSavedLinks] = useState<Link[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const { toast } = useToast();
+
+  // Load saved links on component mount
+  useEffect(() => {
+    setSavedLinks(getSavedLinks());
+  }, []);
 
   const fetchChannelLinks = async () => {
     if (!channelUrl.trim()) {
@@ -65,13 +54,12 @@ const LinkSorter = () => {
 
       console.log("Fetching links for channel:", channelName);
 
-      const { data, error } = await supabase.functions.invoke<ChatData>('kick-chat', {
-        body: { channel: channelName }
-      });
+      // Use our new service instead of Supabase
+      const { success, data, error } = await fetchChannelMessages(channelName);
 
-      if (error) {
-        console.error("Error from kick-chat function:", error);
-        throw new Error(error.message || "Failed to fetch channel data");
+      if (!success || error) {
+        console.error("Error fetching channel data:", error);
+        throw new Error(error?.message || "Failed to fetch channel data");
       }
 
       if (!data) {
@@ -144,15 +132,15 @@ const LinkSorter = () => {
   };
 
   const copyLink = async (url: string, id: string) => {
-    try {
-      await navigator.clipboard.writeText(url);
+    const success = await copyLinkToClipboard(url);
+    if (success) {
       setCopiedId(id);
       toast({
         title: "Link copied",
         description: "Link copied to clipboard",
       });
       setTimeout(() => setCopiedId(null), 2000);
-    } catch (err) {
+    } else {
       toast({
         title: "Failed to copy",
         description: "Please copy the link manually",
@@ -160,6 +148,107 @@ const LinkSorter = () => {
       });
     }
   };
+  
+  const handleSaveLink = (link: Link) => {
+    try {
+      const updatedSavedLinks = saveLink({
+        ...link,
+        id: `saved-${Date.now()}-${Math.random().toString(36).substring(2)}`
+      });
+      setSavedLinks(updatedSavedLinks);
+      toast({
+        title: "Link saved",
+        description: "The link has been saved to your collection",
+      });
+    } catch (error) {
+      toast({
+        title: "Error saving link",
+        description: "Failed to save the link. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+  
+  const handleRemoveSavedLink = (id: string) => {
+    try {
+      const updatedSavedLinks = removeSavedLink(id);
+      setSavedLinks(updatedSavedLinks);
+      toast({
+        title: "Saved link removed",
+        description: "The link has been removed from your saved collection",
+      });
+    } catch (error) {
+      toast({
+        title: "Error removing link",
+        description: "Failed to remove the link. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Render a link card (shared between both tabs)
+  const renderLinkCard = (link: Link, isSaved: boolean = false) => (
+    <Card key={link.id} className="overflow-hidden bg-card/50 hover:bg-card/80 transition-colors">
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <h4 className="font-medium line-clamp-1 mb-1">{link.title}</h4>
+            <p className="text-muted-foreground text-sm truncate mb-2">{link.url}</p>
+            <div className="text-xs text-muted-foreground flex items-center">
+              <span>Shared by {link.username} • {new Date(link.timestamp).toLocaleString()}</span>
+            </div>
+          </div>
+          <div className="flex gap-1">
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => copyLink(link.url, link.id)}
+              className="h-8 w-8"
+            >
+              {copiedId === link.id ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8"
+              onClick={() => window.open(link.url, '_blank')}
+            >
+              <ExternalLink className="h-4 w-4" />
+            </Button>
+            {isSaved ? (
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8 text-destructive hover:text-destructive/80"
+                onClick={() => handleRemoveSavedLink(link.id)}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            ) : (
+              <>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-8 w-8 text-blue-500 hover:text-blue-600"
+                  onClick={() => handleSaveLink(link)}
+                >
+                  <BookmarkPlus className="h-4 w-4" />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-8 w-8 text-destructive hover:text-destructive/80"
+                  onClick={() => removeLink(link.id)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -222,47 +311,7 @@ const LinkSorter = () => {
                       <h3 className="text-lg font-medium">Found {channelLinks.length} links</h3>
                       
                       <div className="grid gap-4">
-                        {channelLinks.map((link) => (
-                          <Card key={link.id} className="overflow-hidden bg-card/50 hover:bg-card/80 transition-colors">
-                            <CardContent className="p-4">
-                              <div className="flex items-start justify-between gap-4">
-                                <div className="flex-1 min-w-0">
-                                  <h4 className="font-medium line-clamp-1 mb-1">{link.title}</h4>
-                                  <p className="text-muted-foreground text-sm truncate mb-2">{link.url}</p>
-                                  <div className="text-xs text-muted-foreground flex items-center">
-                                    <span>Shared by {link.username} • {new Date(link.timestamp).toLocaleString()}</span>
-                                  </div>
-                                </div>
-                                <div className="flex gap-1">
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    onClick={() => copyLink(link.url, link.id)}
-                                    className="h-8 w-8"
-                                  >
-                                    {copiedId === link.id ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-                                  </Button>
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-8 w-8"
-                                    onClick={() => window.open(link.url, '_blank')}
-                                  >
-                                    <ExternalLink className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-8 w-8 text-destructive hover:text-destructive/80"
-                                    onClick={() => removeLink(link.id)}
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        ))}
+                        {channelLinks.map((link) => renderLinkCard(link))}
                       </div>
                     </div>
                   ) : (
@@ -287,13 +336,19 @@ const LinkSorter = () => {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex flex-col items-center justify-center py-8 text-center">
-                    <ExternalLink className="h-12 w-12 text-muted-foreground/40 mb-4" />
-                    <h3 className="text-lg font-medium">No saved links yet</h3>
-                    <p className="text-muted-foreground max-w-md">
-                      Links you save will appear here for future reference.
-                    </p>
-                  </div>
+                  {savedLinks.length > 0 ? (
+                    <div className="grid gap-4">
+                      {savedLinks.map((link) => renderLinkCard(link, true))}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-8 text-center">
+                      <ExternalLink className="h-12 w-12 text-muted-foreground/40 mb-4" />
+                      <h3 className="text-lg font-medium">No saved links yet</h3>
+                      <p className="text-muted-foreground max-w-md">
+                        Links you save will appear here for future reference.
+                      </p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
