@@ -4,12 +4,11 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { 
   clearAuthStorage, 
-  exchangeCodeForToken,
-  fetchUserProfile,
-  createUserProfile,
   saveUserToStorage,
-  saveAuthLog
+  saveAuthLog,
+  createUserProfile
 } from "@/utils/authUtils";
+import { exchangeCodeForToken, fetchUserProfile } from "@/utils/pkceUtils";
 
 interface UseOAuthRedirectProps {
   setLoading: (loading: boolean) => void;
@@ -108,7 +107,7 @@ export const useOAuthRedirect = ({
         // Use the same redirect URI that was used in the initial request
         const redirectUri = window.location.origin + "/login";
         
-        // Exchange code for token
+        // Exchange code for token using direct API call
         const { success: tokenSuccess, data: tokenData, error: tokenError } = await exchangeCodeForToken(
           code, 
           codeVerifier, 
