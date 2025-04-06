@@ -11,7 +11,7 @@ interface ApiResponse<T> {
 
 class MockClient {
   // Simple method to invoke a "function" which will just fetch data from a local API endpoint
-  async functions = {
+  functions = {
     invoke: async <T>(functionName: string, options?: { body: any }): Promise<ApiResponse<T>> => {
       try {
         console.log(`Invoking function: ${functionName}`, options?.body);

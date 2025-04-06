@@ -19,6 +19,16 @@ interface Link {
   username: string;
 }
 
+interface ChatMessage {
+  content: string;
+  username: string;
+  timestamp: string;
+}
+
+interface ChatData {
+  messages: ChatMessage[];
+}
+
 const LinkSorter = () => {
   const { user, isAuthenticated } = useAuth();
   const [channelUrl, setChannelUrl] = useState("");
@@ -55,7 +65,7 @@ const LinkSorter = () => {
 
       console.log("Fetching links for channel:", channelName);
 
-      const { data, error } = await supabase.functions.invoke('kick-chat', {
+      const { data, error } = await supabase.functions.invoke<ChatData>('kick-chat', {
         body: { channel: channelName }
       });
 
@@ -74,7 +84,7 @@ const LinkSorter = () => {
       const seen = new Set<string>();
 
       if (data && data.messages) {
-        data.messages.forEach((msg: any) => {
+        data.messages.forEach((msg: ChatMessage) => {
           if (!msg.content) return;
           
           const urlRegex = /(https?:\/\/[^\s]+)/g;
